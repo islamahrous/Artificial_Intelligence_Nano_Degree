@@ -1,4 +1,3 @@
-
 from itertools import chain, combinations
 from aimacode.planning import Action
 from aimacode.utils import expr
@@ -19,9 +18,22 @@ class ActionLayer(BaseActionLayer):
         --------
         layers.ActionNode
         """
+        # effectsA = self.children[actionA]
+        # effectsB = self.children[actionB]
+        effectsA = actionA.effects
+        effectsB = actionB.effects
+        # print(effectsA)
+        # print(effectsB)
+        # print(type(effectsB))
+        for literal_A in effectsA:
+            for literal_B in effectsB:
+                if literal_B == ~literal_A:
+                    # print(True)
+                    return True
+        # print(False)
+        return False
         # TODO: implement this function
         raise NotImplementedError
-
 
     def _interference(self, actionA, actionB):
         """ Return True if the effects of either action negate the preconditions of the other 
@@ -34,6 +46,23 @@ class ActionLayer(BaseActionLayer):
         --------
         layers.ActionNode
         """
+        effectsA = actionA.effects
+        # print(effectsA)
+        effectsB = actionB.effects
+        # print(effectsB)
+        precondA = self.parents[actionA]
+        # print(precondA)
+        precondB = self.parents[actionB]
+        # print(precondB)
+        for literal_A in effectsA:
+            for precond in precondB:
+                if precond == ~literal_A:
+                    return True
+        for literal_B in effectsB:
+            for precond in precondA:
+                if precond == ~literal_B:
+                    return True
+        return False
         # TODO: implement this function
         raise NotImplementedError
 
@@ -49,6 +78,30 @@ class ActionLayer(BaseActionLayer):
         layers.ActionNode
         layers.BaseLayer.parent_layer
         """
+        precondA = actionA.preconditions
+        precondB = actionB.preconditions
+        # print(precondA)
+        # print(set(self._mutexes[actionB]))
+        # for precond in set(precondA):
+        #     if precond in set(self._mutexes[actionB]):
+        #         print(True)
+        #         return True
+        # print(precondB)
+        # print(self._mutexes[actionA])
+        # for precond in set(precondB):
+        #     if precond in set(self._mutexes[actionA]):
+        #         print('True')
+        #         return True
+        # print(False)
+        # return False
+        # print(precondA)
+        # print(precondB)
+        for i in precondA:
+            # print(i)
+            for j in precondB:
+                if self.parent_layer.is_mutex(i, j):
+                    return True
+        return False
         # TODO: implement this function
         raise NotImplementedError
 
@@ -66,12 +119,25 @@ class LiteralLayer(BaseLiteralLayer):
         --------
         layers.BaseLayer.parent_layer
         """
+        parentA = self.parents[literalA]
+        parentB = self.parents[literalB]
+        for parent1 in parentA:
+            for parent2 in parentB:
+                if not self.parent_layer.is_mutex(parent1, parent2):
+                    return False
+        return True
         # TODO: implement this function
         raise NotImplementedError
 
     def _negation(self, literalA, literalB):
         """ Return True if two literals are negations of each other """
+        if literalA == ~literalB:
+            # print(True)
+            return True
+        # print(False)
+        return False
         # TODO: implement this function
+
         raise NotImplementedError
 
 
@@ -101,7 +167,7 @@ class PlanningGraph:
         # make no-op actions that persist every literal to the next layer
         no_ops = [make_node(n, no_op=True) for n in chain(*(makeNoOp(s) for s in problem.state_map))]
         self._actionNodes = no_ops + [make_node(a) for a in problem.actions_list]
-        
+
         # initialize the planning graph by finding the literals that are in the
         # first layer and finding the actions they they should be connected to
         literals = [s if f else ~s for f, s in zip(state, problem.state_map)]
@@ -109,6 +175,17 @@ class PlanningGraph:
         layer.update_mutexes()
         self.literal_layers = [layer]
         self.action_layers = []
+
+        ## Added by me
+        self.initial_state = literals
+
+    def srch(self, goal_i):
+        # print(len(self.literal_layers))
+        self.fill()
+        # print(len(self.literal_layers))
+        for i, l in enumerate(self.literal_layers):
+            if goal_i in l:
+                return i
 
     def h_levelsum(self):
         """ Calculate the level sum heuristic for the planning graph
@@ -135,6 +212,12 @@ class PlanningGraph:
         --------
         Russell-Norvig 10.3.1 (3rd Edition)
         """
+        level = []
+        for g in self.goal:
+            level.append(self.srch(g))
+        # print(level)
+        return sum(level)
+
         # TODO: implement this function
         raise NotImplementedError
 
@@ -165,6 +248,11 @@ class PlanningGraph:
         -----
         WARNING: you should expect long runtimes using this heuristic with A*
         """
+        level = []
+        for g in self.goal:
+            level.append(self.srch(g))
+        # print(level)
+        return max(level)
         # TODO: implement maxlevel heuristic
         raise NotImplementedError
 
@@ -190,6 +278,21 @@ class PlanningGraph:
         -----
         WARNING: you should expect long runtimes using this heuristic on complex problems
         """
+        self.fill()
+        for i, layer_i in enumerate(self.literal_layers):
+            all_goals_met = True
+            for goal in self.goal:
+                if goal not in layer_i:
+                    all_goals_met = False
+            if not all_goals_met:
+                continue
+            goals_are_mutex = False
+            for goal_a in self.goal:
+                for goal_b in self.goal:
+                    if layer_i.is_mutex(goal_a, goal_b):
+                        goals_are_mutex = True
+            if not goals_are_mutex:
+                return i
         # TODO: implement setlevel heuristic
         raise NotImplementedError
 
